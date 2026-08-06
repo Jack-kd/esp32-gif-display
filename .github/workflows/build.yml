@@ -1,0 +1,65 @@
+name: Build Firmware
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Arduino CLI
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$HOME/.local/bin sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install ESP32 platform
+        run: |
+          arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install "bb_spi_lcd"
+          arduino-cli lib install "AnimatedGIF"
+
+      - name: Add GIFPlayer.h (not included in AnimatedGIF library)
+        run: |
+          USER_DIR=$(arduino-cli config dump | grep 'user:' | awk '{print $2}')
+          LIB_DIR="$USER_DIR/libraries/AnimatedGIF/src"
+          curl -sL https://raw.githubusercontent.com/bitbank2/AnimatedGIF/master/src/GIFPlayer.h -o "$LIB_DIR/GIFPlayer.h"
+          echo "GIFPlayer.h installed to $LIB_DIR"
+
+      - name: Prepare sketch folder
+        # Arduino requires sketch folder name to match .ino file name
+        run: |
+          mkdir -p sketch/esp32-gif-display
+          cp esp32-gif-display.ino sketch/esp32-gif-display/
+          cp config.h sketch/esp32-gif-display/
+          cp -r src sketch/esp32-gif-display/
+          cp -r data sketch/esp32-gif-display/
+
+      - name: Compile firmware
+        run: |
+          arduino-cli compile \
+            --fqbn "esp32:esp32:esp32:PSRAM=opi,FlashSize=16M" \
+            --output-dir build \
+            sketch/esp32-gif-display
+
+      - name: List build output
+        run: ls -la build/
+
+      - name: Upload firmware artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-gif-display-firmware
+          path: |
+            build/*.bin
+            build/*.elf
+          retention-days: 30
