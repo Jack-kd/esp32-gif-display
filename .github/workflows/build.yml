@@ -37,7 +37,6 @@ jobs:
           echo "GIFPlayer.h installed to $LIB_DIR"
 
       - name: Prepare sketch folder
-        # Arduino requires sketch folder name to match .ino file name
         run: |
           mkdir -p sketch/esp32-gif-display
           cp esp32-gif-display.ino sketch/esp32-gif-display/
