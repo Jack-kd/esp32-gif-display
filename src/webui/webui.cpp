@@ -2,6 +2,7 @@
 #include "webui.h"
 #include "../display/display.h"
 #include "../gif_player/gif_player.h"
+#include "../wifi_manager/wifi_manager.h"
 
 #include <WiFi.h>
 #include <LittleFS.h>
@@ -12,13 +13,13 @@ volatile bool g_uploading   = false;
 volatile bool g_request_stop = false;
 volatile bool g_swap_ready   = false;
 
+// ---------- 静态页面 ----------
 static void sendIndex() {
   File file = LittleFS.open("/index.html", "r");
   if (file) {
     String html = file.readString();
     file.close();
 
-    // replace template placeholders with actual config values
     html.replace("{{AP_SSID}}", String(AP_SSID));
     html.replace("{{AP_PASSWORD}}", String(AP_PASS));
     html.replace("{{AP_IP}}", WiFi.softAPIP().toString());
@@ -29,6 +30,7 @@ static void sendIndex() {
   }
 }
 
+// ---------- 上传状态 ----------
 static void sendStatus() {
   String json = "{";
   json += "\"uploading\":" + String(g_uploading ? "true" : "false");
@@ -36,12 +38,12 @@ static void sendStatus() {
   server.send(200, "application/json", json);
 }
 
+// ---------- 方向 ----------
 static void sendOrientation() {
   int lcd_rotation = get_gif_orientation();
   int web_orientation = (lcd_rotation == LCD_ROTATION_PORTRAIT) ? 0 : 1;
   server.send(200, "text/plain", String(web_orientation));
 }
-
 
 static void handleOrientation() {
   if (server.hasArg("orientation")) {
@@ -58,16 +60,48 @@ static void handleOrientation() {
   }
 }
 
+// ---------- WiFi 配置 ----------
+static void handleWiFiStatus() {
+  String json = "{";
+  json += "\"sta_connected\":" + String(wifi_sta_connected() ? "true" : "false");
+  json += ",\"sta_ip\":\"" + String(wifi_sta_ip()) + "\"";
+  json += ",\"sta_ssid\":\"" + String(wifi_sta_ssid()) + "\"";
+  json += ",\"ap_ip\":\"" + WiFi.softAPIP().toString() + "\"";
+  json += "}";
+  server.send(200, "application/json", json);
+}
+
+static void handleWiFiConnect() {
+  if (server.hasArg("ssid") && server.hasArg("pass")) {
+    String ssid = server.arg("ssid");
+    String pass = server.arg("pass");
+    if (ssid.length() > 0) {
+      bool ok = wifi_sta_connect(ssid.c_str(), pass.c_str());
+      server.send(200, "application/json",
+        ok ? "{\"ok\":true,\"msg\":\"Connecting...\"}" : "{\"ok\":false,\"msg\":\"Invalid SSID\"}");
+      return;
+    }
+  }
+  server.send(400, "application/json", "{\"ok\":false,\"msg\":\"Missing ssid or pass\"}");
+}
+
+static void handleWiFiDisconnect() {
+  wifi_sta_disconnect();
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
+// ---------- 文件上传（GIF / MP4） ----------
 static File s_upload;
 static size_t up_written = 0;
 static bool   up_failed  = false;
+static String up_filename = "";
 
 static bool hasGifMagic(const char* path) {
   File f = LittleFS.open(path, "r");
   if (!f) return false;
   char hdr[6]; int n = f.read((uint8_t*)hdr, 6);
   f.close();
-  return n==6 && (memcmp(hdr,"GIF89a",6)==0 || memcmp(hdr,"GIF87a",6)==0);
+  return n == 6 && (memcmp(hdr, "GIF89a", 6) == 0 || memcmp(hdr, "GIF87a", 6) == 0);
 }
 
 static void handleUpload() {
@@ -77,9 +111,19 @@ static void handleUpload() {
     g_uploading   = true;
     up_written    = 0;
     up_failed     = false;
+    up_filename   = up.filename;
+
+    Serial.printf("[upload] 开始接收: %s (%u bytes)\n", up.filename.c_str(), up.totalSize);
+
+    // 检查总大小
+    if (up.totalSize > MAX_UPLOAD_SIZE) {
+      up_failed = true;
+      Serial.printf("[upload] 文件太大: %u > %u\n", up.totalSize, MAX_UPLOAD_SIZE);
+      server.send(413, "text/plain", "File too large");
+      return;
+    }
 
     show_upload_indicator();
-
     g_request_stop = true;
 
     LittleFS.mkdir("/gifs");
@@ -108,16 +152,16 @@ static void handleUpload() {
     { File f = LittleFS.open(GIF_TMP_PATH, "r"); if (f) { finalSize = f.size(); f.close(); } }
 
     if (!up_failed && finalSize == up.totalSize && finalSize > 0 && hasGifMagic(GIF_TMP_PATH)) {
-
       g_swap_ready = true;
     } else {
       LittleFS.remove(GIF_TMP_PATH);
+      if (finalSize > 0 && !hasGifMagic(GIF_TMP_PATH)) {
+        Serial.println("[upload] 文件不是有效的 GIF 格式");
+      }
     }
 
     g_uploading = false;
-
     hide_upload_indicator();
-
     return;
   }
 
@@ -125,23 +169,27 @@ static void handleUpload() {
     if (s_upload) s_upload.close();
     LittleFS.remove(GIF_TMP_PATH);
     g_uploading = false;
+    Serial.println("[upload] 上传已中止");
   }
 }
 
+// ---------- 初始化 ----------
 void webui_begin() {
-  WiFi.mode(WIFI_AP);
-  WiFi.setSleep(false);
-  WiFi.softAP(AP_SSID, AP_PASS);
+  // WiFi 由 wifi_manager 初始化
 
   server.on("/", HTTP_GET, sendIndex);
   server.on("/status", HTTP_GET, sendStatus);
   server.on("/orientation", HTTP_GET, sendOrientation);
   server.on("/orientation", HTTP_POST, handleOrientation);
+  server.on("/wifi/status", HTTP_GET, handleWiFiStatus);
+  server.on("/wifi/connect", HTTP_POST, handleWiFiConnect);
+  server.on("/wifi/disconnect", HTTP_POST, handleWiFiDisconnect);
   server.on("/upload", HTTP_POST,
-    [](){ server.sendHeader("Location","/",true); server.send(303); },
+    [](){ server.sendHeader("Location", "/", true); server.send(303); },
     handleUpload);
   server.onNotFound([](){ server.send(404, "text/plain", "Not found"); });
   server.begin();
+  Serial.println("[WebUI] 服务器已启动");
 }
 
 void webui_handle() {

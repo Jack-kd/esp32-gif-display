@@ -9,7 +9,7 @@ bool upload_indicator_active = false;
 
 bool display_init()
 {
-  lcd.begin(LCD_ST7789, FLAGS_NONE, 40000000, LCD_CS, LCD_DC, LCD_RST, -1, LCD_MISO, LCD_MOSI, LCD_SCLK);
+  lcd.begin(LCD_ILI9341, FLAGS_NONE, 40000000, LCD_CS, LCD_DC, LCD_RST, -1, LCD_MISO, LCD_MOSI, LCD_SCLK);
   lcd.setRotation(load_orientation());
   display_backlight_on(true);
   emptyScreen();

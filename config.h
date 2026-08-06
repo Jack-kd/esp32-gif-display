@@ -1,25 +1,45 @@
 #pragma once
 
-// Pins
-#define LCD_SCLK   39
-#define LCD_MOSI   38
-#define LCD_MISO   40
-#define LCD_DC     42
-#define LCD_RST    0
-#define LCD_CS     45
-#define LCD_BL     1
+// ============================================================
+// 硬件引脚配置 — 请根据你的接线修改
+// 默认适用于 ESP32 通用开发板 + ILI9341 2.4" SPI 屏幕
+// ============================================================
+#define LCD_SCLK   18   // SPI 时钟
+#define LCD_MOSI   23   // SPI 主机输出
+#define LCD_MISO   19   // SPI 主机输入
+#define LCD_DC     2    // 数据/命令
+#define LCD_RST    4    // 复位
+#define LCD_CS     5    // 片选
+#define LCD_BL     15   // 背光（-1 表示不使用）
 
-// LCD
-#define LCD_ROTATION_PORTRAIT 0
+// ============================================================
+// LCD 参数
+// ============================================================
+#define LCD_ROTATION_PORTRAIT  0
 #define LCD_ROTATION_LANDSCAPE 90
-#define LCD_W                 240
-#define LCD_H                 320
+#define LCD_W                  240
+#define LCD_H                  320
 
-// Wi-Fi AP
+// ============================================================
+// Wi-Fi AP 模式（默认热点，用于上传文件）
+// ============================================================
 #define AP_SSID   "ESP32-GIF"
 #define AP_PASS   "upload123"
 
-// Files
+// ============================================================
+// Wi-Fi STA 模式（可选：连接家庭路由器，用于 API 联网）
+// 配置通过 Web 界面设置，保存在 LittleFS 中
+// ============================================================
+#define WIFI_CONFIG_FILE "/wifi.cfg"
+
+// ============================================================
+// 文件路径
+// ============================================================
 #define GIF_ACTIVE_PATH  "/gifs/current.gif"
 #define GIF_TMP_PATH     "/gifs/.upload.tmp"
 #define ORIENTATION_FILE "/gifs/orientation.txt"
+
+// ============================================================
+// 上传限制
+// ============================================================
+#define MAX_UPLOAD_SIZE  (5 * 1024 * 1024)   // 单次上传最大 5 MB
