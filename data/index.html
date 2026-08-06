@@ -1,152 +1,664 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <title>ESP32 GIF Uploader</title>
-    <style>
-      body {
-        font-family: system-ui, Arial;
-        margin: 2rem;
-        max-width: 720px;
-      }
-      .card {
-        border: 1px solid #ccc;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 1rem;
-      }
-      input[type="file"] {
-        margin: 0.5rem 0;
-      }
-      code {
-        background: #f5f5f5;
-        padding: 0.2rem 0.3rem;
-        border-radius: 0.3rem;
-      }
-      .status {
-        background: #e8f5e8;
-        border: 1px solid #4caf50;
-        padding: 0.5rem;
-        border-radius: 0.3rem;
-        margin: 0.5rem 0;
-      }
-      .uploading {
-        background: #fff3cd;
-        border: 1px solid #ffc107;
-        color: #856404;
-      }
-      select {
-        margin: 0.5rem 0;
-        padding: 0.3rem;
-      }
-      button {
-        margin: 0.5rem 0;
-        padding: 0.5rem 1rem;
-        background: #007bff;
-        color: white;
-        border: none;
-        border-radius: 0.3rem;
-        cursor: pointer;
-      }
-      button:hover {
-        background: #0056b3;
-      }
-      .orientation-info {
-        font-size: 0.9em;
-        color: #666;
-        margin-top: 0.5rem;
-      }
-    </style>
-    <script>
-      function updateStatus() {
-        fetch("/status")
-          .then((response) => response.json())
-          .then((data) => {
-            const statusDiv = document.getElementById("status");
-            if (data.uploading) {
-              statusDiv.className = "status uploading";
-              statusDiv.innerHTML = "📤 Uploading GIF... Please wait";
-            } else {
-              statusDiv.className = "status";
-              statusDiv.innerHTML = "✅ Ready for upload";
-            }
-          })
-          .catch((err) => console.log("Status update failed:", err));
-      }
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ESP32 GIF Display</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#eee;min-height:100vh}
+.header{background:#16213e;padding:16px;text-align:center;border-bottom:2px solid #0f3460}
+.header h1{font-size:1.3em;color:#e94560}
+.header p{font-size:.8em;color:#888;margin-top:4px}
+.tabs{display:flex;background:#16213e;border-bottom:1px solid #0f3460}
+.tab{flex:1;padding:12px 8px;text-align:center;cursor:pointer;font-size:.85em;color:#888;border-bottom:2px solid transparent;transition:.2s}
+.tab.active{color:#e94560;border-bottom-color:#e94560}
+.tab:hover{color:#ccc}
+.panel{display:none;padding:16px;max-width:480px;margin:0 auto}
+.panel.active{display:block}
+.card{background:#16213e;border-radius:10px;padding:16px;margin-bottom:14px}
+.card h3{font-size:1em;color:#e94560;margin-bottom:10px}
+label{display:block;font-size:.85em;color:#aaa;margin-bottom:6px;margin-top:10px}
+input[type=text],input[type=password],input[type=file]{width:100%;padding:10px;border-radius:6px;border:1px solid #0f3460;background:#1a1a2e;color:#eee;font-size:.9em;margin-bottom:4px}
+input[type=file]{padding:8px;cursor:pointer}
+input[type=file]::file-selector-button{background:#0f3460;color:#eee;border:none;padding:8px 16px;border-radius:4px;cursor:pointer;margin-right:10px}
+.btn{display:inline-block;padding:10px 20px;border:none;border-radius:6px;font-size:.9em;cursor:pointer;transition:.2s;margin-right:6px;margin-top:8px}
+.btn-primary{background:#e94560;color:#fff}
+.btn-primary:hover{background:#c73a52}
+.btn-secondary{background:#0f3460;color:#eee}
+.btn-secondary:hover{background:#1a4a7a}
+.btn-danger{background:#662222;color:#eee}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center}
+.row label{margin:0}
+.progress{background:#1a1a2e;border-radius:6px;height:10px;margin-top:10px;overflow:hidden;display:none}
+.progress .bar{background:#e94560;height:100%;width:0;transition:width .3s}
+.status{font-size:.8em;color:#aaa;margin-top:6px;min-height:1.2em}
+.status.ok{color:#4caf50}
+.status.err{color:#e94560}
+.orientation-row{display:flex;gap:10px;margin-top:10px}
+.orientation-btn{flex:1;padding:10px;border-radius:6px;border:2px solid #0f3460;background:transparent;color:#aaa;cursor:pointer;font-size:.85em;text-align:center}
+.orientation-btn.active{border-color:#e94560;color:#e94560}
+.fps-row{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+.fps-btn{padding:6px 14px;border-radius:20px;border:1px solid #0f3460;background:transparent;color:#aaa;cursor:pointer;font-size:.8em}
+.fps-btn.active{border-color:#e94560;color:#e94560;background:#e9456020}
+.info{font-size:.75em;color:#666;margin-top:4px}
+.wifi-status{font-size:.8em;padding:8px;border-radius:4px;background:#1a1a2e;margin-top:8px}
+@media(max-width:360px){.tab{font-size:.75em;padding:10px 4px}}
+</style>
+</head>
+<body>
 
-      // update status every 2 seconds
-      setInterval(updateStatus, 2000);
-      updateStatus();
-    </script>
-  </head>
-  <body>
-    <h2>ESP32 GIF Uploader</h2>
+<div class="header">
+  <h1>ESP32 GIF Display</h1>
+  <p>AP: {{AP_SSID}} &nbsp;|&nbsp; IP: {{AP_IP}}</p>
+</div>
 
-    <div id="status" class="status">✅ Ready for upload</div>
+<div class="tabs">
+  <div class="tab active" data-panel="gif">📁 GIF 上传</div>
+  <div class="tab" data-panel="mp4">🎬 MP4→GIF</div>
+  <div class="tab" data-panel="wifi">📶 WiFi 设置</div>
+</div>
 
-    <div class="card">
-      <label for="orientation">Display Orientation:</label><br />
-      <select name="orientation" id="orientation" onchange="setOrientation()">
-        <option value="0">Portrait (240x320)</option>
-        <option value="1">Landscape (320x240)</option>
-      </select>
-      <div class="orientation-info">
-        Choose how the GIF should be displayed on the LCD screen
-      </div>
+<!-- ========== GIF 上传面板 ========== -->
+<div class="panel active" id="panel-gif">
+  <div class="card">
+    <h3>上传 GIF</h3>
+    <input type="file" id="gifFile" accept=".gif">
+    <div class="info">最大 5MB，支持 GIF89a / GIF87a</div>
+    <button class="btn btn-primary" id="gifUploadBtn">上传并播放</button>
+    <div class="progress" id="gifProgress"><div class="bar"></div></div>
+    <div class="status" id="gifStatus"></div>
+  </div>
+
+  <div class="card">
+    <h3>屏幕方向</h3>
+    <div class="orientation-row">
+      <button class="orientation-btn active" data-orient="0">竖屏 240×320</button>
+      <button class="orientation-btn" data-orient="1">横屏 320×240</button>
     </div>
+    <div class="status" id="orientStatus"></div>
+  </div>
+</div>
 
-    <div class="card">
-      <form method="POST" action="/upload" enctype="multipart/form-data">
-        <input type="file" name="upload" accept=".gif" /><br />
-        <button type="submit">Upload & Switch</button>
-      </form>
+<!-- ========== MP4→GIF 面板 ========== -->
+<div class="panel" id="panel-mp4">
+  <div class="card">
+    <h3>视频转 GIF</h3>
+    <p class="info" style="margin-bottom:10px">选择 MP4/WebM 视频，浏览器自动转换后上传到 ESP32</p>
+    <input type="file" id="mp4File" accept=".mp4,.webm,.mov,.avi,.mkv">
+    <div class="info" id="mp4FileInfo"></div>
+  </div>
+
+  <div class="card">
+    <h3>转换参数</h3>
+    <label>最大帧数</label>
+    <div class="fps-row">
+      <button class="fps-btn" data-frames="20">20帧</button>
+      <button class="fps-btn" data-frames="30">30帧</button>
+      <button class="fps-btn active" data-frames="40">40帧</button>
+      <button class="fps-btn" data-frames="60">60帧</button>
+      <button class="fps-btn" data-frames="80">80帧</button>
     </div>
+    <div class="info">帧数越多越流畅，GIF 文件越大</div>
 
-    <div class="card">
-      <h3>Current Settings</h3>
-      <p>
-        Current Orientation: <span id="current-orientation">Loading...</span>
-      </p>
-      <p>
-        Connect to Wi-Fi <b>{{AP_SSID}}</b> (password
-        <code>{{AP_PASSWORD}}</code>) and open <code>http://{{AP_IP}}</code>.
-      </p>
+    <label style="margin-top:12px">画质</label>
+    <div class="fps-row">
+      <button class="fps-btn active" data-quality="0">自动</button>
+      <button class="fps-btn" data-quality="1">高</button>
+      <button class="fps-btn" data-quality="2">标准</button>
+      <button class="fps-btn" data-quality="3">压缩</button>
     </div>
+    <div class="info">"自动"会尝试在满足大小限制的前提下使用最佳画质</div>
+  </div>
 
-    <script>
-      // function to set orientation
-      function setOrientation() {
-        const orientation = document.getElementById("orientation").value;
-        fetch("/orientation", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-          body: "orientation=" + orientation,
-        })
-          .then((response) => response.text())
-          .then((result) => {
-            console.log("Orientation set:", result);
-            updateCurrentOrientation();
-          })
-          .catch((err) => console.log("Failed to set orientation:", err));
+  <button class="btn btn-primary" id="mp4ConvertBtn" disabled>开始转换</button>
+  <button class="btn btn-secondary" id="mp4CancelBtn" style="display:none">取消</button>
+  <div class="progress" id="mp4Progress"><div class="bar"></div></div>
+  <div class="status" id="mp4Status"></div>
+</div>
+
+<!-- ========== WiFi 设置面板 ========== -->
+<div class="panel" id="panel-wifi">
+  <div class="card">
+    <h3>当前状态</h3>
+    <div class="wifi-status" id="wifiStatusBox">加载中...</div>
+  </div>
+  <div class="card">
+    <h3>连接 WiFi</h3>
+    <label>WiFi 名称 (SSID)</label>
+    <input type="text" id="wifiSSID" placeholder="输入 WiFi 名称">
+    <label>密码</label>
+    <input type="password" id="wifiPass" placeholder="输入 WiFi 密码">
+    <button class="btn btn-primary" id="wifiConnectBtn">连接</button>
+    <button class="btn btn-danger" id="wifiDisconnectBtn">断开并清除</button>
+    <div class="status" id="wifiStatus"></div>
+  </div>
+</div>
+
+<script>
+// ==================== GIF 编码器 ====================
+const GIFEncoder = (() => {
+  function put16(arr, i, v) { arr[i]=v&0xFF; arr[i+1]=v>>8; }
+
+  function lzwEncode(data, minCode) {
+    const clear = 1 << minCode, eoi = clear + 1;
+    let next = eoi + 1, sz = minCode + 1, lim = 1 << sz;
+    const out = [];
+    let buf = 0, bc = 0;
+    const wb = (code) => {
+      buf |= (code << bc); bc += sz;
+      while (bc >= 8) { out.push(buf & 0xFF); buf >>= 8; bc -= 8; }
+    };
+    wb(clear);
+    const dict = new Map();
+    for (let i = 0; i < clear; i++) dict.set(String.fromCharCode(i), i);
+    let w = String.fromCharCode(data[0]);
+    for (let i = 1; i < data.length; i++) {
+      const k = String.fromCharCode(data[i]), wk = w + k;
+      if (dict.has(wk)) { w = wk; continue; }
+      wb(dict.get(w));
+      if (next < 4096) {
+        dict.set(wk, next++);
+        if (next >= lim && sz < 12) { sz++; lim = 1 << sz; }
+      } else {
+        wb(clear); dict.clear();
+        for (let j = 0; j < clear; j++) dict.set(String.fromCharCode(j), j);
+        next = eoi + 1; sz = minCode + 1; lim = 1 << sz;
+      }
+      w = k;
+    }
+    if (w.length) wb(dict.get(w));
+    wb(eoi);
+    if (bc > 0) out.push(buf & 0xFF);
+    return out;
+  }
+
+  function buildBlocks(data, minCode) {
+    const raw = lzwEncode(data, minCode);
+    const blocks = [minCode];
+    for (let i = 0; i < raw.length; ) {
+      const len = Math.min(raw.length - i, 255);
+      blocks.push(len);
+      for (let j = 0; j < len; j++) blocks.push(raw[i + j]);
+      i += len;
+    }
+    blocks.push(0);
+    return blocks;
+  }
+
+  return class {
+    constructor(w, h) {
+      this.w = w; this.h = h;
+      this.frames = []; this.delays = [];
+      this.globalPalette = null;
+      this.allColors = new Map();
+    }
+
+    addFrame(pixels, delay) {
+      const localColors = new Map();
+      const len = pixels.length;
+      for (let i = 0; i < len; i += 4) {
+        const key = (pixels[i] << 16) | (pixels[i+1] << 8) | pixels[i+2];
+        localColors.set(key, (localColors.get(key) || 0) + 1);
+        this.allColors.set(key, (this.allColors.get(key) || 0) + 1);
+      }
+      this.frames.push({ pixels: new Uint8ClampedArray(pixels), colors: localColors });
+      this.delays.push(Math.max(1, Math.round(delay / 10)));
+    }
+
+    _buildPalette(maxColors) {
+      const sorted = [...this.allColors.entries()].sort((a, b) => b[1] - a[1]);
+      const palette = sorted.slice(0, Math.min(maxColors, 256));
+      const map = new Map();
+      palette.forEach(([k], i) => map.set(k, i));
+      return { palette, map };
+    }
+
+    _mapToNearest(color, palette) {
+      const r = (color >> 16) & 0xFF, g = (color >> 8) & 0xFF, b = color & 0xFF;
+      let best = 0, bestDist = Infinity;
+      for (let i = 0; i < palette.length; i++) {
+        const c = palette[i][0];
+        const dr = r - ((c >> 16) & 0xFF), dg = g - ((c >> 8) & 0xFF), db = b - (c & 0xFF);
+        const dist = 2*dr*dr + 4*dg*dg + 3*db*db;
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      }
+      return best;
+    }
+
+    finish() {
+      const { palette, map } = this._buildPalette(256);
+      const pc = palette.length;
+      const colorRes = pc <= 2 ? 2 : pc <= 4 ? 4 : pc <= 8 ? 4 : pc <= 16 ? 4 : pc <= 32 ? 5 : pc <= 64 ? 6 : pc <= 128 ? 7 : 8;
+      const minCode = Math.max(2, colorRes);
+
+      const header = new Uint8Array(13);
+      header.set([0x47,0x49,0x46,0x38,0x39,0x61], 0);
+      put16(header, 6, this.w);
+      put16(header, 8, this.h);
+      header[10] = 0xF0 | (colorRes - 1);
+      header[11] = 0;
+      header[12] = 0;
+
+      const gctSize = 1 << colorRes;
+      const gct = new Uint8Array(gctSize * 3);
+      for (let i = 0; i < gctSize; i++) {
+        if (i < palette.length) {
+          const c = palette[i][0];
+          gct[i*3] = (c >> 16) & 0xFF;
+          gct[i*3+1] = (c >> 8) & 0xFF;
+          gct[i*3+2] = c & 0xFF;
+        }
       }
 
-      // function to update current orientation display
-      function updateCurrentOrientation() {
-        const orientation = document.getElementById("orientation").value;
-        document.getElementById("current-orientation").textContent =
-          orientation === "0" ? "Portrait (240x320)" : "Landscape (320x240)";
+      const loopExt = new Uint8Array([0x21,0xFF,0x0B,0x4E,0x45,0x54,0x53,0x43,0x41,0x50,0x45,0x32,0x2E,0x30,0x03,0x01,0x00,0x00,0x00]);
+
+      const parts = [header, gct, loopExt];
+
+      for (let fi = 0; fi < this.frames.length; fi++) {
+        const { pixels } = this.frames[fi];
+        const delay = this.delays[fi];
+
+        const gce = new Uint8Array(8);
+        gce[0]=0x21; gce[1]=0xF9; gce[2]=0x04; gce[3]=0x04;
+        put16(gce, 4, delay);
+        gce[6]=0; gce[7]=0;
+        parts.push(gce);
+
+        const idesc = new Uint8Array(10);
+        idesc[0]=0x2C;
+        put16(idesc,1,0); put16(idesc,3,0);
+        put16(idesc,5,this.w); put16(idesc,7,this.h);
+        idesc[9]=0;
+        parts.push(idesc);
+
+        const indices = new Uint8Array(this.w * this.h);
+        for (let i = 0; i < this.w * this.h; i++) {
+          const r = pixels[i*4], g = pixels[i*4+1], b = pixels[i*4+2];
+          const key = (r << 16) | (g << 8) | b;
+          let idx = map.get(key);
+          if (idx === undefined) idx = this._mapToNearest(key, palette);
+          indices[i] = idx;
+        }
+
+        const blocks = buildBlocks(indices, minCode);
+        parts.push(new Uint8Array(blocks));
       }
 
-      // Load current orientation
-      fetch("/orientation")
-        .then((response) => response.text())
-        .then((orientation) => {
-          document.getElementById("orientation").value = orientation;
-          updateCurrentOrientation();
-        })
-        .catch((err) => console.log("Failed to load orientation:", err));
-    </script>
-  </body>
+      parts.push(new Uint8Array([0x3B]));
+
+      let totalLen = 0;
+      parts.forEach(p => totalLen += p.length);
+      const result = new Uint8Array(totalLen);
+      let off = 0;
+      parts.forEach(p => { result.set(p, off); off += p.length; });
+      return result;
+    }
+  };
+})();
+
+// ==================== 全局状态 ====================
+const AP_IP = '{{AP_IP}}';
+let orientation = 0;
+let maxFrames = 40;
+let quality = 0;
+let mp4Cancelled = false;
+
+// ==================== Tab 切换 ====================
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('panel-' + t.dataset.panel).classList.add('active');
+    if (t.dataset.panel === 'wifi') refreshWiFiStatus();
+  });
+});
+
+// ==================== 方向 ====================
+document.querySelectorAll('.orientation-btn').forEach(b => {
+  b.addEventListener('click', async () => {
+    const o = parseInt(b.dataset.orient);
+    document.querySelectorAll('.orientation-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    const st = document.getElementById('orientStatus');
+    try {
+      const r = await fetch('/orientation?orientation=' + o, { method: 'POST' });
+      st.className = r.ok ? 'status ok' : 'status err';
+      st.textContent = r.ok ? '方向已切换' : '切换失败';
+      if (r.ok) orientation = o;
+    } catch(e) { st.className='status err'; st.textContent='网络错误'; }
+  });
+});
+
+(async () => {
+  try {
+    const r = await fetch('/orientation');
+    const o = parseInt(await r.text());
+    orientation = o;
+    document.querySelectorAll('.orientation-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.orient) === o);
+    });
+  } catch(e) {}
+})();
+
+// ==================== GIF 上传 ====================
+document.getElementById('gifUploadBtn').addEventListener('click', async () => {
+  const file = document.getElementById('gifFile').files[0];
+  const bar = document.getElementById('gifProgress');
+  const barInner = bar.querySelector('.bar');
+  const st = document.getElementById('gifStatus');
+
+  if (!file) { st.className='status err'; st.textContent='请选择 GIF 文件'; return; }
+  if (file.size > 5*1024*1024) { st.className='status err'; st.textContent='文件太大（最大 5MB）'; return; }
+  if (!file.name.toLowerCase().endsWith('.gif')) { st.className='status err'; st.textContent='请选择 .gif 文件'; return; }
+
+  st.textContent = '上传中...'; st.className = 'status';
+  bar.style.display = 'block'; barInner.style.width = '0';
+
+  const form = new FormData(); form.append('file', file);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/upload');
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) barInner.style.width = (e.loaded/e.total*100) + '%';
+  };
+  xhr.onload = () => {
+    bar.style.display = 'none';
+    if (xhr.status === 200 || xhr.status === 303) {
+      st.className = 'status ok'; st.textContent = '上传成功！正在播放...';
+    } else {
+      st.className = 'status err'; st.textContent = '上传失败: ' + xhr.status;
+    }
+  };
+  xhr.onerror = () => { bar.style.display='none'; st.className='status err'; st.textContent='上传失败'; };
+  xhr.send(form);
+});
+
+// ==================== MP4 参数 ====================
+document.querySelectorAll('.fps-btn[data-frames]').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.fps-btn[data-frames]').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    maxFrames = parseInt(b.dataset.frames);
+  });
+});
+document.querySelectorAll('.fps-btn[data-quality]').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.fps-btn[data-quality]').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    quality = parseInt(b.dataset.quality);
+  });
+});
+
+document.getElementById('mp4File').addEventListener('change', function() {
+  const f = this.files[0];
+  const info = document.getElementById('mp4FileInfo');
+  const btn = document.getElementById('mp4ConvertBtn');
+  if (!f) { info.textContent=''; btn.disabled=true; return; }
+  const sizeMB = (f.size/1024/1024).toFixed(1);
+  info.textContent = f.name + ' — ' + sizeMB + ' MB';
+  if (f.size > 100*1024*1024) {
+    info.textContent += '  ⚠ 文件较大，转换可能较慢';
+  }
+  btn.disabled = false;
+});
+
+// ==================== MP4→GIF 转换 ====================
+document.getElementById('mp4ConvertBtn').addEventListener('click', startMP4Convert);
+document.getElementById('mp4CancelBtn').addEventListener('click', () => { mp4Cancelled = true; });
+
+async function startMP4Convert() {
+  const file = document.getElementById('mp4File').files[0];
+  const bar = document.getElementById('mp4Progress');
+  const barInner = bar.querySelector('.bar');
+  const st = document.getElementById('mp4Status');
+  const btn = document.getElementById('mp4ConvertBtn');
+  const cancelBtn = document.getElementById('mp4CancelBtn');
+
+  if (!file) return;
+
+  mp4Cancelled = false;
+  btn.style.display = 'none';
+  cancelBtn.style.display = 'inline-block';
+  bar.style.display = 'block';
+  barInner.style.width = '0';
+  st.className = 'status';
+  st.textContent = '加载视频...';
+
+  try {
+    let gif = await convertMP4toGIF(file, (msg, pct) => {
+      st.textContent = msg;
+      barInner.style.width = pct + '%';
+    });
+
+    if (mp4Cancelled) { resetMP4UI(); return; }
+
+    const gifSizeMB = gif.length / 1024 / 1024;
+    st.textContent = 'GIF 生成完成: ' + gifSizeMB.toFixed(1) + ' MB';
+
+    if (gifSizeMB > 5) {
+      if (quality === 0 && maxFrames > 10) {
+        st.textContent = 'GIF 太大 (' + gifSizeMB.toFixed(1) + 'MB)，自动降低帧数重试...';
+        const reducedFrames = Math.max(10, Math.floor(maxFrames * 3 / gifSizeMB));
+        maxFrames = reducedFrames;
+        document.querySelectorAll('.fps-btn[data-frames]').forEach(b => {
+          b.classList.toggle('active', parseInt(b.dataset.frames) === reducedFrames);
+        });
+        gif = await convertMP4toGIF(file, (msg, pct) => {
+          st.textContent = msg;
+          barInner.style.width = (50 + pct/2) + '%';
+        });
+        if (mp4Cancelled) { resetMP4UI(); return; }
+        const newSize = gif.length / 1024 / 1024;
+        if (newSize > 5) {
+          st.className = 'status err';
+          st.textContent = 'GIF 仍然太大 (' + newSize.toFixed(1) + 'MB)，请减少帧数后重试';
+          resetMP4UI();
+          return;
+        }
+      } else if (gifSizeMB > 5) {
+        st.className = 'status err';
+        st.textContent = 'GIF 太大 (' + gifSizeMB.toFixed(1) + 'MB)，请减少帧数后重试';
+        resetMP4UI();
+        return;
+      }
+    }
+
+    st.textContent = '上传到 ESP32...';
+    barInner.style.width = '85%';
+    const gifBlob = new Blob([gif], { type: 'image/gif' });
+    const form = new FormData();
+    form.append('file', gifBlob, 'converted.gif');
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/upload');
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) barInner.style.width = (85 + e.loaded/e.total*15) + '%';
+    };
+    await new Promise((resolve, reject) => {
+      xhr.onload = () => {
+        if (xhr.status === 200 || xhr.status === 303) resolve();
+        else reject(new Error('上传失败: ' + xhr.status));
+      };
+      xhr.onerror = () => reject(new Error('上传失败'));
+      xhr.send(form);
+    });
+
+    barInner.style.width = '100%';
+    st.className = 'status ok';
+    st.textContent = '完成！GIF 正在播放';
+  } catch(e) {
+    if (!mp4Cancelled) {
+      st.className = 'status err';
+      st.textContent = '错误: ' + e.message;
+    }
+  }
+  resetMP4UI();
+}
+
+function resetMP4UI() {
+  document.getElementById('mp4ConvertBtn').style.display = 'inline-block';
+  document.getElementById('mp4CancelBtn').style.display = 'none';
+  setTimeout(() => {
+    document.getElementById('mp4Progress').style.display = 'none';
+  }, 1500);
+}
+
+async function convertMP4toGIF(file, progress) {
+  progress('创建视频元素...', 5);
+  const video = document.createElement('video');
+  video.preload = 'metadata';
+  video.muted = true;
+  video.playsInline = true;
+  const url = URL.createObjectURL(file);
+  video.src = url;
+
+  await new Promise((resolve, reject) => {
+    video.onloadedmetadata = resolve;
+    video.onerror = () => reject(new Error('无法解码视频，请确认格式为 MP4/WebM'));
+    setTimeout(() => reject(new Error('视频加载超时')), 15000);
+  });
+
+  const duration = video.duration;
+  if (!duration || duration <= 0) throw new Error('无法读取视频时长');
+
+  progress('视频时长: ' + duration.toFixed(1) + '秒', 10);
+
+  const displayW = orientation === 0 ? 240 : 320;
+  const displayH = orientation === 0 ? 320 : 240;
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const scale = Math.min(displayW / vw, displayH / vh);
+  const fw = Math.round(vw * scale), fh = Math.round(vh * scale);
+
+  let scaleFactor = 1.0;
+  if (quality === 2) scaleFactor = 0.8;
+  else if (quality === 3) scaleFactor = 0.6;
+
+  const actualW = Math.round(fw * scaleFactor);
+  const actualH = Math.round(fh * scaleFactor);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = actualW;
+  canvas.height = actualH;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const frames = Math.min(maxFrames, Math.max(5, Math.round(duration * 10)));
+  const interval = duration / frames;
+
+  progress('提取 ' + frames + ' 帧...', 15);
+
+  const encoder = new GIFEncoder(actualW, actualH);
+  const frameDelay = Math.round(interval * 100);
+
+  for (let i = 0; i < frames; i++) {
+    if (mp4Cancelled) throw new Error('已取消');
+
+    const t = Math.min(interval * i + interval / 2, duration - 0.05);
+    video.currentTime = t;
+    await new Promise(resolve => { video.onseeked = resolve; });
+    if (video.readyState < 2) {
+      await new Promise(resolve => { video.oncanplay = resolve; });
+    }
+
+    ctx.drawImage(video, 0, 0, actualW, actualH);
+    const imageData = ctx.getImageData(0, 0, actualW, actualH);
+
+    const fullPixels = new Uint8ClampedArray(displayW * displayH * 4);
+    for (let p = 0; p < displayW * displayH; p++) {
+      fullPixels[p*4] = 0;
+      fullPixels[p*4+1] = 0;
+      fullPixels[p*4+2] = 0;
+      fullPixels[p*4+3] = 255;
+    }
+    const ox = Math.round((displayW - actualW) / 2);
+    const oy = Math.round((displayH - actualH) / 2);
+    for (let y = 0; y < actualH; y++) {
+      for (let x = 0; x < actualW; x++) {
+        const si = (y * actualW + x) * 4;
+        const di = ((oy + y) * displayW + (ox + x)) * 4;
+        fullPixels[di] = imageData.data[si];
+        fullPixels[di+1] = imageData.data[si+1];
+        fullPixels[di+2] = imageData.data[si+2];
+        fullPixels[di+3] = 255;
+      }
+    }
+
+    encoder.addFrame(fullPixels, frameDelay);
+
+    const pct = 15 + Math.round((i + 1) / frames * 60);
+    progress('提取帧 ' + (i+1) + '/' + frames, pct);
+  }
+
+  URL.revokeObjectURL(url);
+
+  progress('编码 GIF...', 80);
+  await new Promise(r => setTimeout(r, 10));
+
+  const gifData = encoder.finish();
+
+  progress('完成', 95);
+  return gifData;
+}
+
+// ==================== WiFi 管理 ====================
+async function refreshWiFiStatus() {
+  try {
+    const r = await fetch('/wifi/status');
+    const data = await r.json();
+    const box = document.getElementById('wifiStatusBox');
+    if (data.sta_connected) {
+      box.innerHTML = '✅ 已连接: <b>' + data.sta_ssid + '</b><br>IP: ' + data.sta_ip;
+    } else {
+      box.innerHTML = '❌ 未连接外部 WiFi<br>AP 模式: ' + data.ap_ip;
+    }
+  } catch(e) {
+    document.getElementById('wifiStatusBox').textContent = '获取状态失败';
+  }
+}
+
+document.getElementById('wifiConnectBtn').addEventListener('click', async () => {
+  const ssid = document.getElementById('wifiSSID').value.trim();
+  const pass = document.getElementById('wifiPass').value;
+  const st = document.getElementById('wifiStatus');
+  if (!ssid) { st.className='status err'; st.textContent='请输入 WiFi 名称'; return; }
+
+  st.className = 'status'; st.textContent = '连接中...';
+  try {
+    const form = new FormData();
+    form.append('ssid', ssid);
+    form.append('pass', pass);
+    const r = await fetch('/wifi/connect', { method: 'POST', body: form });
+    const data = await r.json();
+    if (data.ok) {
+      st.className = 'status ok'; st.textContent = '已保存配置，正在连接...';
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        const sr = await fetch('/wifi/status');
+        const sd = await sr.json();
+        if (sd.sta_connected) {
+          clearInterval(poll);
+          st.className = 'status ok';
+          st.textContent = '已连接！IP: ' + sd.sta_ip;
+          refreshWiFiStatus();
+        }
+        if (++attempts > 30) { clearInterval(poll); st.textContent = '连接超时，请检查密码'; st.className='status err'; }
+      }, 2000);
+    } else {
+      st.className = 'status err'; st.textContent = data.msg || '连接失败';
+    }
+  } catch(e) { st.className='status err'; st.textContent = '网络错误'; }
+});
+
+document.getElementById('wifiDisconnectBtn').addEventListener('click', async () => {
+  const st = document.getElementById('wifiStatus');
+  try {
+    await fetch('/wifi/disconnect', { method: 'POST' });
+    st.className = 'status ok'; st.textContent = '已断开连接';
+    refreshWiFiStatus();
+  } catch(e) { st.className='status err'; st.textContent = '操作失败'; }
+});
+</script>
+</body>
 </html>
