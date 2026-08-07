@@ -34,8 +34,12 @@ jobs:
 
       - name: Add GIFPlayer.h (not included in AnimatedGIF library)
         run: |
-          USER_DIR=$(arduino-cli config dump | grep 'user:' | awk '{print $2}')
+          USER_DIR=$(arduino-cli config dump --format json 2>/dev/null | grep -o '"user"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | cut -d'"' -f4)
+          if [ -z "$USER_DIR" ]; then
+            USER_DIR="$HOME/Arduino"
+          fi
           LIB_DIR="$USER_DIR/libraries/AnimatedGIF/src"
+          mkdir -p "$LIB_DIR"
           curl -sL https://raw.githubusercontent.com/bitbank2/AnimatedGIF/master/src/GIFPlayer.h -o "$LIB_DIR/GIFPlayer.h"
           echo "GIFPlayer.h installed to $LIB_DIR"
 
