@@ -59,6 +59,17 @@ jobs:
             --output-dir build \
             sketch/esp32-gif-display
 
+      - name: Generate LittleFS image
+        run: |
+          MKLFS=$(find $HOME/.arduino15/packages/esp32/tools/mklittlefs -name mklittlefs -type f 2>/dev/null | head -1)
+          if [ -z "$MKLFS" ]; then
+            echo "mklittlefs not found, skipping LittleFS image generation"
+            exit 0
+          fi
+          echo "Using mklittlefs: $MKLFS"
+          $MKLFS -c data -s 3145728 build/esp32-gif-display.littlefs.bin
+          echo "LittleFS image generated"
+
       - name: List build output
         run: ls -la build/
 
