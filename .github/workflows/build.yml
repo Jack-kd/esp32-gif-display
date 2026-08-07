@@ -55,7 +55,7 @@ jobs:
       - name: Compile firmware
         run: |
           arduino-cli compile \
-            --fqbn "esp32:esp32:esp32:PSRAM=enable,FlashSize=16M" \
+            --fqbn "esp32:esp32:esp32:PSRAM=enabled,FlashSize=16M" \
             --output-dir build \
             sketch/esp32-gif-display
 
