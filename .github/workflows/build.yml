@@ -15,7 +15,10 @@ jobs:
 
       - name: Install Arduino CLI
         run: |
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=$HOME/.local/bin sh
+          mkdir -p $HOME/.local/bin
+          LATEST_URL=$(curl -s https://api.github.com/repos/arduino/arduino-cli/releases/latest | grep "browser_download_url.*Linux_64bit.tar.gz" | cut -d '"' -f 4)
+          curl -sL "$LATEST_URL" -o /tmp/arduino-cli.tar.gz
+          tar xf /tmp/arduino-cli.tar.gz -C $HOME/.local/bin/
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Install ESP32 platform
