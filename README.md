@@ -1,130 +1,223 @@
 # ESP32 GIF Display
 
-A ESP32-based GIF display that creates a WiFi access point for uploading and displaying GIF animations on LCD screens. Originally designed for the ESP32-S3-LCD-2 Waveshare board but configurable for other ESP32 boards with SPI LCD displays.
+> **中文：** 基于 ESP32 的 GIF 播放器，通过 WiFi 热点提供网页界面，支持上传 GIF 并在 ILI9341 SPI 屏幕上播放。支持浏览器端 MP4 转 GIF、WiFi STA/AP 双模、GitHub Actions 自动编译固件。
+
+> **EN:** A WiFi-enabled ESP32 GIF display that creates a web interface for uploading and playing GIF animations on an ILI9341 SPI LCD screen. Features browser-side MP4-to-GIF conversion, WiFi STA/AP dual mode, and CI/CD auto-build.
+
+---
 
 ## Hardware Requirements
 
-- **ESP32 board** (Configured for the ESP32-S3-LCD-2 by default)
-- **SPI LCD display** (240x320 resolution by default)
+> **中文：** 硬件需求
 
-## Board Compatibility
+| Component | Spec |
+|---|---|
+| **MCU** | ESP32-DOWD-V3, Flash 16MB, PSRAM 8MB |
+| **LCD** | 2.4" TFT, ILI9341 driver, 4-wire SPI, 240×320 |
+| **Touch** | XPT2046 (optional) |
 
-This project should work with any ESP32 board, but you'll need to:
+> **中文：** 必须使用带 PSRAM 的 ESP32 — GIF 解码器需要 PSRAM 分配 3 × 宽 × 高 字节内存。
 
-1. **Configure pin assignments** in `config.h` to match your board's LCD connections
-2. **Enable PSRAM** (Required due to the use of `GIFPlayer.h` from [AnimatedGIF](https://github.com/bitbank2/AnimatedGIF))
+> **EN:** PSRAM is required — the GIF decoder allocates 3 × W × H bytes in PSRAM.
 
-### Recommended Boards
-
-- **ESP32-S3-LCD-2 Waveshare** (tested, pin configuration included)
-- **ESP32-S3** with SPI LCD breakout (PSRAM required)
-- **ESP32** with SPI LCD breakout (PSRAM required)
-
-**Important**: Only ESP32 boards with PSRAM support will work with this project.
-
-## Important Configuration Notes
-
-### PSRAM Configuration
-
-**REQUIRED**: PSRAM is mandatory for this project. The `GIFPlayer.h` library from AnimatedGIF requires PSRAM memory allocation (3 × width × height bytes) and will not work without it.
-
-In Arduino IDE:
-
-1. Select your ESP32 board variant
-2. Set **PSRAM** to **"OPI PSRAM"** (this is what works with ESP32-S3-LCD-2)
-3. Leave other settings as default unless you encounter issues
-
-**Note**: This project will not function on boards without PSRAM support due to the memory requirements of the GIF player.
-
-## Required Libraries
-
-Install these libraries through Arduino IDE Library Manager:
-
-1. **bb_spi_lcd** - For LCD display control
-2. **AnimatedGIF** - For GIF decoding and playback
-
-### Library Installation Quirk
-
-There's a known issue with the AnimatedGIF library: the `GIFPlayer.h` header file is not included in the standard library installation. You'll need to manually add it:
-
-1. Download `GIFPlayer.h` from the [AnimatedGIF GitHub repository](https://github.com/bitbank2/AnimatedGIF/tree/master/src)
-2. Place it in your Arduino libraries folder alongside `AnimatedGIF.h` and `AnimatedGIF.cpp`
-3. The file should be located at: `Arduino/libraries/AnimatedGIF/src/GIFPlayer.h`
+---
 
 ## Features
 
-- **Web-based GIF Upload**: Upload GIFs through a simple web interface
-- **Orientation Control**: Switch between portrait (240x320) and landscape (320x240) display modes
-- **Real-time Status**: Live upload status and progress indicators
-- **Persistent Settings**: Display orientation settings are saved and restored on reboot
-- **Hot-swappable GIFs**: Upload new GIFs without interrupting playback
+> **中文：** 功能特性
 
-## Setup Instructions
+- **Web-based Upload** — Upload GIFs via a web interface served by ESP32
+  > **中文：** 网页上传 — 通过 ESP32 提供的网页界面上传 GIF
+- **MP4 → GIF Conversion** — Browser-side video-to-GIF with quality/size controls
+  > **中文：** MP4 转 GIF — 浏览器端视频转 GIF，支持帧数和画质调节
+- **Orientation Control** — Portrait (240×320) / Landscape (320×240)
+  > **中文：** 方向切换 — 竖屏 / 横屏切换
+- **WiFi STA + AP** — Default AP mode (hotspot) + optional STA mode (connect to home router)
+  > **中文：** 双模 WiFi — 默认 AP 热点模式，可切换 STA 连接家庭路由器
+- **Persistent Settings** — WiFi credentials and orientation saved in LittleFS
+  > **中文：** 配置持久化 — WiFi 密码和方向设置保存在 LittleFS 中
+- **CI/CD Auto Build** — GitHub Actions compiles firmware + LittleFS image on every push
+  > **中文：** 自动编译 — GitHub Actions 每次推送自动编译固件和 LittleFS 镜像
 
-1. **Install Required Libraries** (see Library Installation Quirk above)
-2. **Install LittleFS Uploader Plugin**: Download and install the [LittleFS Uploader Plugin](https://github.com/earlephilhower/arduino-littlefs-upload/releases) for Arduino IDE
-3. **Configure Arduino IDE**:
-   - Select your ESP32 board variant
-   - Set PSRAM to "OPI PSRAM"
-4. **Configure Pin Assignments**: Update `config.h` to match your board's LCD connections
-5. **Upload the Code** to your ESP32 board
-6. **Upload LittleFS Data**:
-   - Press **Ctrl+Shift+P** to open the command palette
-   - Type "LittleFS" and select **"Upload LittleFS to Pico/ESP8266/ESP32"**
-   - This uploads the `data/` directory containing the web interface HTML file
-7. **Connect to WiFi**: The ESP32 will create an access point named "ESP32-GIF" (password: "upload123")
-8. **Open Web Interface**: Navigate to `http://192.168.4.1` in your browser
+---
+
+## Pin Configuration
+
+> **中文：** 引脚配置，在 `config.h` 中定义。
+
+> **EN:** Defined in `config.h`.
+
+| Pin | GPIO | Function |
+|---|---|---|
+| `LCD_SCLK` | 18 | SPI Clock |
+| `LCD_MOSI` | 23 | SPI MOSI |
+| `LCD_MISO` | 19 | SPI MISO |
+| `LCD_DC` | 2 | Data/Command |
+| `LCD_RST` | 4 | Reset |
+| `LCD_CS` | 5 | Chip Select |
+| `LCD_BL` | 15 | Backlight |
+
+---
+
+## Required Libraries
+
+> **中文：** 依赖库
+
+| Library | Purpose |
+|---|---|
+| `bb_spi_lcd` | LCD driver |
+| `AnimatedGIF` | GIF decoding |
+
+### GIFPlayer.h
+
+> **中文：** `GIFPlayer.h` 不在 AnimatedGIF 标准库中，需要手动下载放到 `AnimatedGIF.h` 同一目录。
+
+> **EN:** The `GIFPlayer.h` header is **not included** in the standard AnimatedGIF library. Download it manually and place it alongside `AnimatedGIF.h`.
+
+Download from / 下载地址：
+```
+https://github.com/bitbank2/AnimatedGIF/blob/master/src/GIFPlayer.h
+```
+
+Target path / 目标路径：
+```
+Arduino/libraries/AnimatedGIF/src/GIFPlayer.h
+```
+
+---
+
+## Setup
+
+> **中文：** 使用步骤
+
+### 1. Flash Firmware
+
+> **中文：** 烧录固件。从 [GitHub Actions](https://github.com/Jack-kd/esp32-gif-display/actions) 下载最新 artifact，或本地编译。
+
+> **EN:** Download the latest artifact from [GitHub Actions](https://github.com/Jack-kd/esp32-gif-display/actions) or build locally.
+
+**Flash addresses / 烧录地址：**
+
+| File | Address |
+|---|---|
+| `esp32-gif-display.ino.bootloader.bin` | **0x1000** |
+| `esp32-gif-display.ino.partitions.bin` | **0x8000** |
+| `esp32-gif-display.ino.bin` | **0x10000** |
+| `esp32-gif-display.littlefs.bin` | **0x290000** |
+
+> **中文：** 可使用 ESPflasher、esptool 或任意 ESP32 烧录工具。
+
+> **EN:** You can use ESPflasher, esptool, or any ESP32 flashing tool.
+
+### 2. Connect
+
+> **中文：** ESP32 开机后创建 WiFi 热点，连接后访问网页。
+
+> **EN:** The ESP32 creates a WiFi hotspot. Connect and open the web interface.
+
+| Item | Value |
+|---|---|
+| **SSID** | `ESP32-GIF` |
+| **Password** | `upload123` |
+| **Web URL** | `http://192.168.4.1` |
+
+### 3. (Optional) Connect to Home WiFi
+
+> **中文：** 在网页界面的 WiFi 设置标签页中输入路由器 SSID 和密码即可连接家庭 WiFi。
+
+> **EN:** In the web interface, go to the WiFi settings tab and enter your router's SSID and password.
+
+---
 
 ## Usage
 
-1. **Set Display Orientation**: Choose between Portrait or Landscape mode
-2. **Upload GIF**: Select a GIF file and click "Upload & Switch"
-3. **Enjoy**: Your GIF will start playing immediately on the LCD
+> **中文：** 使用说明
 
-## Technical Details
+1. Connect to `ESP32-GIF` WiFi
+   > **中文：** 连接 `ESP32-GIF` 热点
+2. Open `http://192.168.4.1`
+   > **中文：** 浏览器打开 `http://192.168.4.1`
+3. **Upload GIF** tab: Select a `.gif` file and upload — plays immediately
+   > **中文：** **上传 GIF** 标签页：选择 `.gif` 文件上传，立即播放
+4. **Video → GIF** tab: Select an `.mp4` file, set frame count and quality, convert and upload
+   > **中文：** **视频转 GIF** 标签页：选择 `.mp4` 文件，设置帧数和画质，浏览器自动转换后上传
+5. **WiFi** tab: Configure STA mode to connect to your home router
+   > **中文：** **WiFi** 标签页：配置 STA 模式连接家庭路由器
 
-- **Display Resolution**: 240x320 pixels
-- **Supported Format**: GIF animations
-- **Storage**: Uses LittleFS filesystem
-- **WiFi**: Creates access point for easy configuration
-- **Memory**: Requires PSRAM for GIF decoding (3 × width × height bytes)
+---
 
 ## File Structure
 
 ```
 esp32-gif-display/
-├── esp32-gif-display.ino    # Main Arduino sketch
-├── config.h                 # Pin definitions and configuration
+├── esp32-gif-display.ino      # Main sketch / 主程序
+├── config.h                   # Pin & config / 引脚和配置
 ├── data/
-│   └── index.html          # Web interface
-└── src/
-    ├── display/            # LCD display control
-    ├── gif_player/         # GIF playback logic
-    └── webui/              # Web server and upload handling
+│   └── index.html             # Web UI / 网页界面
+├── src/
+│   ├── display/               # LCD driver / 屏幕驱动
+│   │   ├── display.h
+│   │   └── display.cpp
+│   ├── gif_player/            # GIF playback / GIF 播放
+│   │   ├── gif_player.h
+│   │   └── gif_player.cpp
+│   ├── webui/                 # Web server / 网页服务
+│   │   ├── webui.h
+│   │   └── webui.cpp
+│   └── wifi_manager/          # WiFi STA/AP / WiFi 管理
+│       ├── wifi_manager.h
+│       └── wifi_manager.cpp
+└── .github/workflows/
+    └── build.yml              # CI auto-build / 自动编译
 ```
+
+---
+
+## Build Locally
+
+> **中文：** 本地编译
+
+```bash
+# Install Arduino CLI / 安装 Arduino CLI
+curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+
+# Install ESP32 platform / 安装 ESP32 平台
+arduino-cli config init --additional-urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core update-index
+arduino-cli core install esp32:esp32
+
+# Install libraries / 安装依赖库
+arduino-cli lib install "bb_spi_lcd"
+arduino-cli lib install "AnimatedGIF"
+
+# Compile / 编译
+arduino-cli compile \
+  --fqbn "esp32:esp32:esp32:PSRAM=enabled,FlashSize=16M" \
+  --output-dir build \
+  .
+```
+
+---
 
 ## Troubleshooting
 
-- **GIF not displaying**: Ensure PSRAM is enabled in board settings (required)
-- **Compilation errors**: Verify your ESP32 board supports PSRAM
-- **Upload fails**: Check that GIF file is valid and not too large
-- **Display issues**: Verify pin connections match `config.h` definitions
-- **Library errors**: Ensure `GIFPlayer.h` is manually added to AnimatedGIF library
+> **中文：** 常见问题
 
-## Pin Configuration
+| Problem | Solution |
+|---|---|
+| GIF not playing | Ensure PSRAM is enabled |
+| > **中文：** GIF 不播放 | > **中文：** 确认 PSRAM 已启用 |
+| Web page 404 | Flash `littlefs.bin` to 0x290000 |
+| > **中文：** 网页 404 | > **中文：** 烧录 littlefs.bin 到 0x290000 |
+| Upload fails | GIF must be < 5MB |
+| > **中文：** 上传失败 | > **中文：** GIF 文件需小于 5MB |
+| Can't connect to WiFi | Check AP_SSID/AP_PASS in config.h |
+| > **中文：** 连不上热点 | > **中文：** 检查 config.h 中热点配置 |
 
-The project uses configurable pin assignments defined in `config.h`. Default configuration for ESP32-S3-LCD-2 Waveshare:
-
-- LCD_SCLK: GPIO 39
-- LCD_MOSI: GPIO 38
-- LCD_MISO: GPIO 40
-- LCD_DC: GPIO 42
-- LCD_RST: GPIO 0
-- LCD_CS: GPIO 45
-- LCD_BL: GPIO 1 (backlight control)
-
-**For other boards**: Modify the pin definitions in `config.h` to match your specific LCD connections.
+---
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+> **中文：** MIT 许可证，详见 [LICENSE](LICENSE) 文件。
+
+> **EN:** MIT License. See [LICENSE](LICENSE) for details.

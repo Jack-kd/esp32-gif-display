@@ -196,6 +196,8 @@ const GIFEncoder = (() => {
     }
 
     addFrame(pixels, delay) {
+      // pixels: Uint8ClampedArray [r,g,b,a, r,g,b,a, ...]
+      // Collect colors
       const localColors = new Map();
       const len = pixels.length;
       for (let i = 0; i < len; i += 4) {
@@ -204,10 +206,11 @@ const GIFEncoder = (() => {
         this.allColors.set(key, (this.allColors.get(key) || 0) + 1);
       }
       this.frames.push({ pixels: new Uint8ClampedArray(pixels), colors: localColors });
-      this.delays.push(Math.max(1, Math.round(delay / 10)));
+      this.delays.push(Math.max(1, Math.round(delay / 10))); // cs units
     }
 
     _buildPalette(maxColors) {
+      // Sort by frequency
       const sorted = [...this.allColors.entries()].sort((a, b) => b[1] - a[1]);
       const palette = sorted.slice(0, Math.min(maxColors, 256));
       const map = new Map();
@@ -234,13 +237,14 @@ const GIFEncoder = (() => {
       const minCode = Math.max(2, colorRes);
 
       const header = new Uint8Array(13);
-      header.set([0x47,0x49,0x46,0x38,0x39,0x61], 0);
+      header.set([0x47,0x49,0x46,0x38,0x39,0x61], 0); // GIF89a
       put16(header, 6, this.w);
       put16(header, 8, this.h);
-      header[10] = 0xF0 | (colorRes - 1);
-      header[11] = 0;
-      header[12] = 0;
+      header[10] = 0xF0 | (colorRes - 1); // global color table flag + color res
+      header[11] = 0; // bg color index
+      header[12] = 0; // pixel aspect ratio
 
+      // Global color table
       const gctSize = 1 << colorRes;
       const gct = new Uint8Array(gctSize * 3);
       for (let i = 0; i < gctSize; i++) {
@@ -252,27 +256,32 @@ const GIFEncoder = (() => {
         }
       }
 
+      // Netscape looping extension
       const loopExt = new Uint8Array([0x21,0xFF,0x0B,0x4E,0x45,0x54,0x53,0x43,0x41,0x50,0x45,0x32,0x2E,0x30,0x03,0x01,0x00,0x00,0x00]);
 
+      // Build output
       const parts = [header, gct, loopExt];
 
       for (let fi = 0; fi < this.frames.length; fi++) {
         const { pixels } = this.frames[fi];
         const delay = this.delays[fi];
 
+        // Graphic Control Extension
         const gce = new Uint8Array(8);
-        gce[0]=0x21; gce[1]=0xF9; gce[2]=0x04; gce[3]=0x04;
+        gce[0]=0x21; gce[1]=0xF9; gce[2]=0x04; gce[3]=0x04; // disposal: restore to bg
         put16(gce, 4, delay);
         gce[6]=0; gce[7]=0;
         parts.push(gce);
 
+        // Image Descriptor
         const idesc = new Uint8Array(10);
         idesc[0]=0x2C;
-        put16(idesc,1,0); put16(idesc,3,0);
+        put16(idesc,1,0); put16(idesc,3,0); // left, top
         put16(idesc,5,this.w); put16(idesc,7,this.h);
-        idesc[9]=0;
+        idesc[9]=0; // no local color table
         parts.push(idesc);
 
+        // Convert pixels to indices
         const indices = new Uint8Array(this.w * this.h);
         for (let i = 0; i < this.w * this.h; i++) {
           const r = pixels[i*4], g = pixels[i*4+1], b = pixels[i*4+2];
@@ -282,12 +291,15 @@ const GIFEncoder = (() => {
           indices[i] = idx;
         }
 
+        // Image data
         const blocks = buildBlocks(indices, minCode);
         parts.push(new Uint8Array(blocks));
       }
 
+      // Trailer
       parts.push(new Uint8Array([0x3B]));
 
+      // Concatenate
       let totalLen = 0;
       parts.forEach(p => totalLen += p.length);
       const result = new Uint8Array(totalLen);
@@ -332,6 +344,7 @@ document.querySelectorAll('.orientation-btn').forEach(b => {
   });
 });
 
+// 加载当前方向
 (async () => {
   try {
     const r = await fetch('/orientation');
@@ -391,6 +404,7 @@ document.querySelectorAll('.fps-btn[data-quality]').forEach(b => {
   });
 });
 
+// MP4 文件选择
 document.getElementById('mp4File').addEventListener('change', function() {
   const f = this.files[0];
   const info = document.getElementById('mp4FileInfo');
@@ -434,10 +448,12 @@ async function startMP4Convert() {
 
     if (mp4Cancelled) { resetMP4UI(); return; }
 
+    // 检查 GIF 大小
     const gifSizeMB = gif.length / 1024 / 1024;
     st.textContent = 'GIF 生成完成: ' + gifSizeMB.toFixed(1) + ' MB';
 
     if (gifSizeMB > 5) {
+      // 如果太大且是自动模式，尝试降低帧数
       if (quality === 0 && maxFrames > 10) {
         st.textContent = 'GIF 太大 (' + gifSizeMB.toFixed(1) + 'MB)，自动降低帧数重试...';
         const reducedFrames = Math.max(10, Math.floor(maxFrames * 3 / gifSizeMB));
@@ -465,6 +481,7 @@ async function startMP4Convert() {
       }
     }
 
+    // 上传到 ESP32
     st.textContent = '上传到 ESP32...';
     barInner.style.width = '85%';
     const gifBlob = new Blob([gif], { type: 'image/gif' });
@@ -525,16 +542,19 @@ async function convertMP4toGIF(file, progress) {
 
   progress('视频时长: ' + duration.toFixed(1) + '秒', 10);
 
+  // 计算参数
   const displayW = orientation === 0 ? 240 : 320;
   const displayH = orientation === 0 ? 320 : 240;
 
+  // 缩放以适配屏幕
   const vw = video.videoWidth, vh = video.videoHeight;
   const scale = Math.min(displayW / vw, displayH / vh);
   const fw = Math.round(vw * scale), fh = Math.round(vh * scale);
 
+  // 画质调整
   let scaleFactor = 1.0;
-  if (quality === 2) scaleFactor = 0.8;
-  else if (quality === 3) scaleFactor = 0.6;
+  if (quality === 2) scaleFactor = 0.8;    // 标准
+  else if (quality === 3) scaleFactor = 0.6; // 压缩
 
   const actualW = Math.round(fw * scaleFactor);
   const actualH = Math.round(fh * scaleFactor);
@@ -558,6 +578,7 @@ async function convertMP4toGIF(file, progress) {
     const t = Math.min(interval * i + interval / 2, duration - 0.05);
     video.currentTime = t;
     await new Promise(resolve => { video.onseeked = resolve; });
+    // 确保视频已准备好
     if (video.readyState < 2) {
       await new Promise(resolve => { video.oncanplay = resolve; });
     }
@@ -565,13 +586,16 @@ async function convertMP4toGIF(file, progress) {
     ctx.drawImage(video, 0, 0, actualW, actualH);
     const imageData = ctx.getImageData(0, 0, actualW, actualH);
 
+    // 填充到显示尺寸
     const fullPixels = new Uint8ClampedArray(displayW * displayH * 4);
+    // 黑色背景
     for (let p = 0; p < displayW * displayH; p++) {
       fullPixels[p*4] = 0;
       fullPixels[p*4+1] = 0;
       fullPixels[p*4+2] = 0;
       fullPixels[p*4+3] = 255;
     }
+    // 居中放置缩放后的帧
     const ox = Math.round((displayW - actualW) / 2);
     const oy = Math.round((displayH - actualH) / 2);
     for (let y = 0; y < actualH; y++) {
@@ -594,6 +618,7 @@ async function convertMP4toGIF(file, progress) {
   URL.revokeObjectURL(url);
 
   progress('编码 GIF...', 80);
+  // 让浏览器有时间更新 UI
   await new Promise(r => setTimeout(r, 10));
 
   const gifData = encoder.finish();
@@ -633,6 +658,7 @@ document.getElementById('wifiConnectBtn').addEventListener('click', async () => 
     const data = await r.json();
     if (data.ok) {
       st.className = 'status ok'; st.textContent = '已保存配置，正在连接...';
+      // 轮询连接状态
       let attempts = 0;
       const poll = setInterval(async () => {
         const sr = await fetch('/wifi/status');
