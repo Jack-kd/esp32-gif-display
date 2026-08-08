@@ -55,7 +55,7 @@ jobs:
       - name: Compile firmware
         run: |
           arduino-cli compile \
-            --fqbn "esp32:esp32:esp32:PSRAM=enabled,FlashSize=16M" \
+            --fqbn "esp32:esp32:esp32:PSRAM=enabled,FlashSize=4M" \
             --output-dir build \
             sketch/esp32-gif-display
 
@@ -67,7 +67,7 @@ jobs:
             exit 0
           fi
           echo "Using mklittlefs: $MKLFS"
-          $MKLFS -c data -s 3145728 build/esp32-gif-display.littlefs.bin
+          $MKLFS -c data -s 1474560 build/esp32-gif-display.littlefs.bin
           echo "LittleFS image generated"
 
       - name: List build output
